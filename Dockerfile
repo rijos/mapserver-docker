@@ -42,7 +42,7 @@ RUN tar xzvf proj-datumgrid-latest.tar.gz
 
 # Build proj
 RUN tar xzvf proj-${PROJ_VERSION}.tar.gz && \
-    cd /gdal-${PROJ_VERSION} && \
+    cd /proj-${PROJ_VERSION} && \
     ./configure --prefix=/build/proj && make && make install
 
 # Build gdal
