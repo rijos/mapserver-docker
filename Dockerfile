@@ -1,119 +1,39 @@
-FROM debian:buster as builder
-LABEL maintainer="PDOK dev <pdok@kadaster.nl>"
-
+FROM ubuntu:latest AS build-env
 ENV DEBIAN_FRONTEND noninteractive
+
+LABEL maintainer="PDOK dev <pdok@kadaster.nl>"
 ENV TZ Europe/Amsterdam
 
-RUN apt-get -y update && \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        gettext \
-        bzip2 \
-        cmake \
-        g++ \
-        git \
-        libcairo2-dev \
-        locales \
-        make \
-        patch \
-        openssh-server \
-        protobuf-compiler \
-        protobuf-c-compiler \
-        software-properties-common \
-        wget && \
-    rm -rf /var/lib/apt/lists/*
+ENV GDAL_VERSION="3.1.3"
+ENV GDAL_SHA="3156036cd71e54932a4043111793c0d4257d46ca2c1c33ebae7be80665bdc403"
+ARG GDAL_DOWNLOAD_URL="https://github.com/OSGeo/gdal/releases/download/v${GDAL_VERSION}/gdal-${GDAL_VERSION}.tar.gz"
 
-RUN update-locale LANG=C.UTF-8
+ENV MAPSERVER_VERSION="mapserver-7.6.1"
+ENV MAPSERVER_SHA="2d250874d55bee44e0dbbb3a38e612f8572730705edada00c6ab8b2c9e890581"
+ARG MAPSERVER_DOWNLOAD_URL="https://download.osgeo.org/mapserver/${MAPSERVER_VERSION}.tar.gz"
 
-ENV HARFBUZZ_VERSION 2.4.0
+# Setup build environment
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential wget autoconf automake libpng-dev libproj-dev libfreetype6-dev libfcgi-dev
 
-RUN cd /tmp && \
-        wget https://www.freedesktop.org/software/harfbuzz/release/harfbuzz-$HARFBUZZ_VERSION.tar.bz2 && \
-        tar xjf harfbuzz-$HARFBUZZ_VERSION.tar.bz2 && \
-        cd harfbuzz-$HARFBUZZ_VERSION && \
-        ./configure && \
-        make && \
-        make install && \
-        ldconfig
+# Download sources
+RUN wget ${GDAL_DOWNLOAD_URL} && \
+    echo ${GDAL_SHA} gdal-${GDAL_VERSION}.tar.gz | sha256sum -c -
 
-RUN apt-get -y update && \
-    apt-get install -y --no-install-recommends \
-        libcurl4-gnutls-dev \
-        libfribidi-dev \
-        libgif-dev \
-        libjpeg-dev \
-        libpq-dev \
-        librsvg2-dev \      
-        libpng-dev \
-        libfreetype6-dev \
-        libjpeg-dev \
-        libexempi-dev \
-        libfcgi-dev \
-        libgdal-dev \
-        libgeos-dev \
-        libproj-dev \
-        librsvg2-dev \
-        libprotobuf-dev \
-        libprotobuf-c-dev \
-        libprotobuf-c1 \
-        libxslt1-dev && \
-    rm -rf /var/lib/apt/lists/*
+RUN wget ${MAPSERVER_DOWNLOAD_URL} && \
+    echo ${MAPSERVER_SHA} ${MAPSERVER_VERSION}.tar.gz | sha256sum -c -
 
-RUN apt-get -y update --fix-missing
+# Build gdal
+RUN tar xzvf gdal-${GDAL_VERSION}.tar.gz && \
+    cd /gdal-${GDAL_VERSION} && \
+    ./configure --with-libtiff=internal && make && make install
 
-RUN git clone --single-branch -b rel-7-6-1 https://github.com/pdok/mapserver/ /usr/local/src/mapserver
-
-RUN mkdir /usr/local/src/mapserver/build && \
-    cd /usr/local/src/mapserver/build && \
-    cmake ../ \
-        -DWITH_PROJ=ON \
-        -DWITH_KML=OFF \
-        -DWITH_SOS=OFF \
-        -DWITH_WMS=ON \
-        -DWITH_FRIBIDI=ON \
-        -DWITH_HARFBUZZ=ON \
-        -DWITH_ICONV=ON \
-        -DWITH_CAIRO=ON \
-        -DWITH_SVGCAIRO=OFF \
-        -DWITH_RSVG=ON \
-        -DWITH_MYSQL=OFF \
-        -DWITH_FCGI=ON \
-        -DWITH_GEOS=ON \
-        -DWITH_POSTGIS=ON \
-        -DWITH_GDAL=ON \
-        -DWITH_OGR=ON \
-        -DWITH_CURL=ON \
-        -DWITH_CLIENT_WMS=ON \
-        -DWITH_CLIENT_WFS=ON \
-        -DWITH_WFS=ON \
-        -DWITH_WCS=ON \
-        -DWITH_LIBXML2=ON \
-        -DWITH_THREAD_SAFETY=OFF \
-        -DWITH_GIF=ON \
-        -DWITH_PYTHON=OFF \
-        -DWITH_PHP=OFF \
-        -DWITH_PERL=OFF \
-        -DWITH_RUBY=OFF \
-        -DWITH_JAVA=OFF \
-        -DWITH_CSHARP=OFF \
-        -DWITH_ORACLESPATIAL=OFF \
-        -DWITH_ORACLE_PLUGIN=OFF \
-        -DWITH_MSSQL2008=OFF \
-        -DWITH_SDE_PLUGIN=OFF \
-        -DWITH_SDE=OFF \
-        -DWITH_EXEMPI=ON \
-        -DWITH_XMLMAPFILE=ON \
-        -DWITH_V8=OFF \
-        -DBUILD_STATIC=OFF \
-        -DLINK_STATIC_LIBMAPSERVER=OFF \
-        -DWITH_APACHE_MODULE=OFF \          
-        -DWITH_POINT_Z_M=ON \
-        -DWITH_GENERIC_NINT=OFF \
-        -DWITH_PROTOBUFC=ON \
-        -DCMAKE_PREFIX_PATH=/opt/gdal && \
-    make && \
-    make install && \
-    ldconfig
+# Build mapserver
+RUN tar xzvf ${MAPSERVER_VERSION}.tar.gz && \
+    cd /${MAPSERVER_VERSION} && \
+    mkdir build && cd build && \
+    cmake -DCMAKE_PREFIX_PATH=/opt/gdal -DWITH_FCGI=1 && \ 
+    make && make install && ldconfig
 
 FROM pdok/lighttpd:1.4-1 as service
 LABEL maintainer="PDOK dev <pdok@kadaster.nl>"
@@ -121,34 +41,8 @@ LABEL maintainer="PDOK dev <pdok@kadaster.nl>"
 ENV DEBIAN_FRONTEND noninteractive
 ENV TZ Europe/Amsterdam
 
-COPY --from=0 /usr/local/bin /usr/local/bin
-COPY --from=0 /usr/local/lib /usr/local/lib
-
-RUN apt-get -y update && \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        libpng16-16 \
-        python-cairo \
-        libfreetype6 \
-        libjpeg62-turbo \
-        libfcgi0ldbl \
-        libfribidi0 \
-        libgdal20 \
-        libgeos-c1v5 \
-        libglib2.0-0 \
-        libproj13 \
-        libxml2 \
-        libxslt1.1 \
-        libexempi8 \
-        libpq5 \
-        libfreetype6 \
-        librsvg2-2 \
-        libprotobuf17 \
-        libprotobuf-c1 \
-        gettext-base \
-        wget \
-        gnupg && \
-    rm -rf /var/lib/apt/lists/*
+COPY --from=build-env /usr/local/bin /usr/local/bin
+COPY --from=build-env /usr/local/lib /usr/local/lib
 
 COPY etc/lighttpd.conf /lighttpd.conf
 
