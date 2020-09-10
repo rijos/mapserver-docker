@@ -14,7 +14,7 @@ ARG MAPSERVER_DOWNLOAD_URL="https://download.osgeo.org/mapserver/${MAPSERVER_VER
 
 # Setup build environment
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential wget autoconf automake libpng-dev libproj-dev libfreetype6-dev libfcgi-dev
+    apt-get install -y --no-install-recommends build-essential wget autoconf ca-certificates automake libpng-dev libproj-dev libfreetype6-dev libfcgi-dev
 
 # Download sources
 RUN wget ${GDAL_DOWNLOAD_URL} && \
