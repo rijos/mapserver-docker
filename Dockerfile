@@ -20,7 +20,7 @@ ARG MAPSERVER_DOWNLOAD_URL="https://download.osgeo.org/mapserver/${MAPSERVER_VER
 
 # Setup build environment
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential cmake wget autoconf ca-certificates automake libpng-dev libfreetype6-dev libfcgi-dev sqlite3 libsqlite3-dev libtool
+    apt-get install -y --no-install-recommends build-essential cmake wget autoconf ca-certificates automake libpng-dev libfreetype6-dev libfcgi-dev sqlite3 libsqlite3-dev libtool pkg-config
 
 # Download sources
 RUN wget https://download.osgeo.org/proj/proj-datumgrid-latest.tar.gz && \
