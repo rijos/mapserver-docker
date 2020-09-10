@@ -23,7 +23,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential cmake wget autoconf ca-certificates automake libpng-dev libfreetype6-dev libfcgi-dev sqlite3 libsqlite3-dev libtool
 
 # Download sources
-RUN wget https://download.osgeo.org/proj/proj-datumgrid-latest.tar.gz \
+RUN wget https://download.osgeo.org/proj/proj-datumgrid-latest.tar.gz && \
     echo ${PROJGRID_SHA} proj-datumgrid-latest.tar.gz | sha256sum -c -
 
 RUN wget ${PROJ_DOWNLOAD_URL} && \
