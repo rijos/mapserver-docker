@@ -20,7 +20,7 @@ ARG MAPSERVER_DOWNLOAD_URL="https://download.osgeo.org/mapserver/${MAPSERVER_VER
 
 # Setup build environment
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential cmake wget autoconf ca-certificates automake libpng-dev libfreetype6-dev libfcgi-dev libtiff curl sqlite3 libsqlite3-dev libtool pkg-config
+    apt-get install -y --no-install-recommends build-essential cmake wget autoconf ca-certificates automake curl libxml2-dev libpng-dev libfreetype6-dev libfcgi-dev libtiff-dev libcurl4-openssl-dev sqlite3 libsqlite3-dev libtool pkg-config
 
 # Download sources
 RUN wget https://download.osgeo.org/proj/proj-datumgrid-latest.tar.gz && \
@@ -38,26 +38,31 @@ RUN wget ${MAPSERVER_DOWNLOAD_URL} && \
 RUN mkdir /build
 
 # Build PROJGRID
-RUN tar xzvf proj-datumgrid-latest.tar.gz
+RUN mkdir grid && tar xzvf proj-datumgrid-latest.tar.gz -C grid
 
 # Build proj
 RUN tar xzvf proj-${PROJ_VERSION}.tar.gz && \
     cd /proj-${PROJ_VERSION} && \
-    ./configure --prefix=/build/proj && make && make install
+    ./configure --prefix=/build/proj && make -j$(nproc) && make install
 
 # Build gdal
 RUN tar xzvf gdal-${GDAL_VERSION}.tar.gz && \
     cd /gdal-${GDAL_VERSION} && \
     ./configure --prefix=/build/gdal --with-proj=/build/proj LDFLAGS="-L/build/proj/lib" CPPFLAGS="-I/build/proj/include" \ 
-    --prefix=/builds/gdal --with-threads --with-libtiff=internal --with-geotiff=internal --with-jpeg=internal --with-gif=internal --with-png=internal --with-libz=internal && \ 
-    make && make install
+    --prefix=/build/gdal --with-threads --with-libtiff=internal --with-geotiff=internal --with-jpeg=internal --with-gif=internal --with-png=internal --with-libz=internal && \ 
+    make -j$(nproc) && make install
 
 # Build mapserver
 RUN tar xzvf ${MAPSERVER_VERSION}.tar.gz && \
     cd /${MAPSERVER_VERSION} && \
     mkdir build && cd build && \
-    cmake ../ -DCMAKE_PREFIX_PATH=/build/gdal -DWITH_FCGI=1 && \ 
-    make && make install DESTDIR="/build/mapserver" && ldconfig
+    cmake -DWITH_GIF=0 -DWITH_POSTGIS=0 -DWITH_PROTOBUFC=0 -DWITH_GEOS=0 \
+    -DWITH_FRIBIDI=0 -DWITH_HARFBUZZ=0 -DWITH_CAIRO=0 -DWITH_FCGI=1 \
+    -DCMAKE_PREFIX_PATH=/build/gdal:/build/proj:/usr/local:/opt -DCMAKE_INSTALL_PREFIX=/build/mapserver \
+    -DPROJ_INCLUDE_DIR=/build/proj/include -DPROJ_LIBRARY=/build/proj/lib/libproj.so \ 
+    -DGDAL_INCLUDE_DIR=/build/gdal/include -DGDAL_LIBRARY=/build/gdal/lib/libgdal.so \ 
+    ../ > ../configure.out.txt && \
+    make -j$(nproc) && make install && ldconfig
 
 FROM pdok/lighttpd:1.4-1 as service
 LABEL maintainer="PDOK dev <pdok@kadaster.nl>"
@@ -65,7 +70,7 @@ LABEL maintainer="PDOK dev <pdok@kadaster.nl>"
 ENV DEBIAN_FRONTEND noninteractive
 ENV TZ Europe/Amsterdam
 
-COPY --from=build-env  /build/proj-datumgrid-latest/ /usr/share/proj
+COPY --from=build-env  /grid /usr/share/proj/
 COPY --from=build-env  /build/proj/share/proj/ /usr/share/proj/
 COPY --from=build-env  /build/proj/include/ /usr/include/
 COPY --from=build-env  /build/proj/bin/ /usr/bin/
