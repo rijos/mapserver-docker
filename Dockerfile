@@ -64,28 +64,23 @@ RUN tar xzvf ${MAPSERVER_VERSION}.tar.gz && \
     ../ > ../configure.out.txt && \
     make -j$(nproc) && make install && ldconfig
 
-FROM pdok/lighttpd:1.4-1 as service
+FROM ubuntu:latest
 LABEL maintainer="PDOK dev <pdok@kadaster.nl>"
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV TZ Europe/Amsterdam
+ENV PATH="/build/proj/bin:/build/proj/lib:/build/gdal/bin:/build/gdal/lib:/build/mapserver/lib:${PATH}"
+
+RUN apt-get -y update && \
+    apt-get install -y --no-install-recommends lighttpd lighttpd-mod-magnet && \
+    apt-get install -y --no-install-recommends libxml2-dev libpng-dev libfreetype6-dev libfcgi-dev libtiff-dev libcurl4-openssl-dev sqlite3 libsqlite3-dev && \
+    apt clean 
 
 COPY --from=build-env  /grid /usr/share/proj/
-COPY --from=build-env  /build/proj/share/proj/ /usr/share/proj/
-COPY --from=build-env  /build/proj/include/ /usr/include/
-COPY --from=build-env  /build/proj/bin/ /usr/bin/
-COPY --from=build-env  /build/proj/lib/ /usr/lib/
-
-COPY --from=build-env  /build/gdal/ /usr/share/gdal/
-
-COPY --from=build-env /build/mapserver/bin /usr/local/bin
-COPY --from=build-env /build/mapserver/lib /usr/local/lib
-
+COPY --from=build-env /build /build
 COPY etc/lighttpd.conf /lighttpd.conf
 
-RUN chmod o+x /usr/local/bin/mapserv
-RUN apt-get clean
-
+RUN chmod o+x /build/mapserver/bin/mapserv
 ENV DEBUG 0
 ENV MIN_PROCS 1
 ENV MAX_PROCS 3
