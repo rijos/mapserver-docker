@@ -20,7 +20,9 @@ ARG MAPSERVER_DOWNLOAD_URL="https://download.osgeo.org/mapserver/${MAPSERVER_VER
 
 # Setup build environment
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential cmake wget autoconf ca-certificates automake curl libxml2-dev libpng-dev libfreetype6-dev libfcgi-dev libtiff-dev libcurl4-openssl-dev sqlite3 libsqlite3-dev libtool pkg-config
+    apt-get install -y --no-install-recommends build-essential cmake wget autoconf ca-certificates automake \
+    curl libxml2-dev libpng-dev libfreetype6-dev libfcgi-dev libtiff-dev libcurl4-openssl-dev sqlite3 libsqlite3-dev libtool pkg-config \
+    libwebp-dev
 
 # Download sources
 RUN wget https://download.osgeo.org/proj/proj-datumgrid-latest.tar.gz && \
@@ -49,7 +51,8 @@ RUN tar xzvf proj-${PROJ_VERSION}.tar.gz && \
 RUN tar xzvf gdal-${GDAL_VERSION}.tar.gz && \
     cd /gdal-${GDAL_VERSION} && \
     ./configure --prefix=/build/gdal --with-proj=/build/proj LDFLAGS="-L/build/proj/lib" CPPFLAGS="-I/build/proj/include" \ 
-    --prefix=/build/gdal --with-threads --with-libtiff=internal --with-geotiff=internal --with-jpeg=internal --with-gif=internal --with-png=internal --with-libz=internal && \ 
+    --prefix=/build/gdal --with-threads=yes --with-webp --with-libtiff=internal --disable-debug --disable-static \
+    --with-geotiff=internal --with-jpeg=internal --with-gif=internal --with-png=internal --with-libz=internal && \ 
     make -j$(nproc) && make install
 
 # Build mapserver
@@ -73,7 +76,7 @@ ENV PATH="/build/proj/bin:/build/proj/lib:/build/gdal/bin:/build/gdal/lib:/build
 
 RUN apt-get -y update && \
     apt-get install -y --no-install-recommends lighttpd lighttpd-mod-magnet && \
-    apt-get install -y --no-install-recommends libxml2-dev libpng-dev libfreetype6-dev libfcgi-dev libtiff-dev libcurl4-openssl-dev sqlite3 libsqlite3-dev && \
+    apt-get install -y --no-install-recommends libxml2-dev libpng-dev libfreetype6-dev libfcgi-dev libtiff-dev libcurl4-openssl-dev libwebp-dev sqlite3 libsqlite3-dev && \
     apt clean 
 
 COPY --from=build-env  /grid /usr/share/proj/
