@@ -33,8 +33,7 @@ ARG MAPSERVER_DOWNLOAD_URL="https://download.osgeo.org/mapserver/${MAPSERVER_VER
 # Setup build environment
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential cmake wget autoconf ca-certificates automake \
-    curl libxml2-dev libpng-dev libfreetype6-dev libjpeg-dev libfcgi-dev sqlite3 libsqlite3-dev libtool pkg-config \
-    libwebp-dev
+    curl libxml2-dev libpng-dev libfreetype6-dev libjpeg-dev libfcgi-dev sqlite3 libsqlite3-dev libtool pkg-config
 
 # Download sources
 RUN wget https://download.osgeo.org/proj/proj-datumgrid-latest.tar.gz && \
@@ -63,18 +62,18 @@ RUN mkdir /build
 # Build webp
 RUN tar xzf libwebp-${WEBP_VERSION}.tar.gz && \
     cd libwebp-${WEBP_VERSION} && \
-    CFLAGS="-O2 -Wl,-S" ./configure --prefix=/build/webp --enable-silent-rules && \
+    CFLAGS="-O2 -Wl,-S" ./configure --prefix=/build --enable-silent-rules && \
     make -j$(nproc) && make install
 
 # Build libtiff
 RUN tar -xzf tiff-${LIBTIFF_VERSION}.tar.gz && \
     cd tiff-${LIBTIFF_VERSION} && \
-    ./configure --prefix=/build/libtiff && \
+    ./configure --prefix=/build && \
     make -j$(nproc) && make install
 
 # Build curl
 RUN tar -xzf curl-${CURL_VERSION}.tar.gz && cd curl-${CURL_VERSION} && \
-    ./configure --prefix=/build/curl && \
+    ./configure --prefix=/build && \
     make -j$(nproc) && make install
 
 # Build PROJGRID
@@ -83,13 +82,13 @@ RUN mkdir grid && tar xzvf proj-datumgrid-latest.tar.gz -C grid
 # Build proj
 RUN tar xzvf proj-${PROJ_VERSION}.tar.gz && \
     cd /proj-${PROJ_VERSION} && \
-    TIFF_LIBS="-L/build/libtiff/lib -ltiff" TIFF_CFLAGS="-I/build/libtiff/include" ./configure --with-curl="/build/curl/bin/curl-config" --prefix=/build/proj && make -j$(nproc) && make install
+    TIFF_LIBS="-L/build/lib -ltiff" TIFF_CFLAGS="-I/build/include" ./configure --with-curl="/build/bin/curl-config" --prefix=/build && make -j$(nproc) && make install
 
 # Build gdal
 RUN tar xzvf gdal-${GDAL_VERSION}.tar.gz && \
     cd /gdal-${GDAL_VERSION} && \
-    ./configure --prefix=/build/gdal --with-proj=/build/proj LDFLAGS="-L/build/proj/lib" CPPFLAGS="-I/build/proj/include" \ 
-    --prefix=/build/gdal --with-threads=yes --with-webp=/build/webp --with-libtiff=internal --disable-debug --disable-static \
+    ./configure --prefix=/build/gdal --with-proj=/build LDFLAGS="-L/build/lib" CPPFLAGS="-I/build/include" \ 
+    --prefix=/build --with-threads=yes --with-webp=/build --with-libtiff=internal --disable-debug --disable-static \
     --with-geotiff=internal --with-jpeg=internal --with-gif=internal --with-png=internal --with-libz=internal && \ 
     make -j$(nproc) && make install
 
@@ -100,9 +99,9 @@ RUN tar xzvf ${MAPSERVER_VERSION}.tar.gz && \
     cmake -DWITH_GIF=0 -DWITH_POSTGIS=0 -DWITH_PROTOBUFC=0 -DWITH_GEOS=0 \
     -DWITH_FRIBIDI=0 -DWITH_HARFBUZZ=0 -DWITH_CAIRO=0 -DWITH_FCGI=1 \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_PREFIX_PATH=/build/curl:/build/libtiff:/build/gdal:/build/proj:/usr/local:/opt -DCMAKE_INSTALL_PREFIX=/build/mapserver \
-    -DPROJ_INCLUDE_DIR=/build/proj/include -DPROJ_LIBRARY=/build/proj/lib/libproj.so \ 
-    -DGDAL_INCLUDE_DIR=/build/gdal/include -DGDAL_LIBRARY=/build/gdal/lib/libgdal.so \ 
+    -DCMAKE_PREFIX_PATH=/build:/build/proj:/usr/local:/opt -DCMAKE_INSTALL_PREFIX=/build \
+    -DPROJ_INCLUDE_DIR=/build/include -DPROJ_LIBRARY=/build/lib/libproj.so \ 
+    -DGDAL_INCLUDE_DIR=/build/include -DGDAL_LIBRARY=/build/lib/libgdal.so \ 
     ../ > ../configure.out.txt && \
     make -j$(nproc) && make install && ldconfig
 
@@ -111,18 +110,18 @@ LABEL maintainer="PDOK dev <pdok@kadaster.nl>"
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV TZ Europe/Amsterdam
-ENV PATH="/build/libtiff/bin:/build/libtiff/lib:/build/curl/lib:/build/curl/bin:/build/curl:/build/webp/lib:/build/proj/bin:/build/proj/lib:/build/gdal/bin:/build/gdal/lib:/build/mapserver/lib:${PATH}"
+ENV PATH="/build/bin:/build/lib:${PATH}"
 
 RUN apt-get -y update && \
     apt-get install -y --no-install-recommends lighttpd lighttpd-mod-magnet \ 
-            libxml2 libpng16-16 libfreetype6 libfcgi sqlite3 && \
+            libxml2 libpng16-16 libfreetype6 libjpeg-turbo8 libfcgi sqlite3 && \
     apt clean 
 
 COPY --from=build-env  /grid /usr/share/proj/
 COPY --from=build-env /build /build
-COPY etc/lighttpd.conf /lighttpd.conf
+COPY /etc/lighttpd.conf /lighttpd.conf
 
-RUN chmod o+x /build/mapserver/bin/mapserv
+RUN chmod o+x /build/bin/mapserv
 ENV DEBUG 0
 ENV MIN_PROCS 1
 ENV MAX_PROCS 3
